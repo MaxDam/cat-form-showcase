@@ -1,4 +1,4 @@
-# Catform Showcase
+# CatForm Showcase
 
 This plugin contains a series of examples on how to use cat-forms
 
