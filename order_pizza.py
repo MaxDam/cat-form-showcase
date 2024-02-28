@@ -55,12 +55,7 @@ JSON must be in this format:
 }}
 ```
 
-Examples of User Message:
-- I would like to exit the module
-- I no longer want to continue filling out the form
-- You go out
-- Return to normal conversation
-- Stop and go out
+{stop_example_prompt}
 
 ###User Message:
 {user_message}
