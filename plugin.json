@@ -1,10 +1,10 @@
 {
-    "name": "My plugin",
+    "name": "Catform Showcase",
     "version": "0.0.1",
-    "description": "Description of my_plugin.",
-    "author_name": "Me",
-    "author_url": "https://mywebsite.me",
-    "plugin_url": "https://github.com/my_name/my_plugin",
-    "tags": "cat, template, example",
-    "thumb": "https://raw.githubusercontent.com/my_repo_path/my_plugin.png"
+    "description": "A series of examples on the use of cat forms",
+    "author_name": "Massimiliano D'Amico",
+    "author_url": "https://www.linkedin.com/in/massimilianodamico",
+    "plugin_url": "https://github.com/MaxDam/cat-form",
+    "tags": "catform, conversational, action",
+    "thumb": "https://maxdam.github.io/cat-form/img/thumb.jpg"
 }
