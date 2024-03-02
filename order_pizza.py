@@ -1,8 +1,11 @@
 from typing import List, Dict
 from pydantic import BaseModel, Field
 from cat.log import log
-from cat.experimental.form import form, CatForm
+from cat.experimental.form import form, CatForm, CatFormState
 import random
+from langchain.chains import LLMChain
+from langchain_core.prompts.prompt import PromptTemplate
+import json
 
 class PizzaOrder(BaseModel):
     pizza_type: str
@@ -16,7 +19,7 @@ class PizzaForm(CatForm):
 
     description = "Pizza Order"
     model_class = PizzaOrder
-    ask_confirm = False
+    ask_confirm : bool = True
     start_examples = [
         "order a pizza",
         "I want pizza",
@@ -33,18 +36,27 @@ class PizzaForm(CatForm):
     form_chat_history = []
 
 
-    # Check exit intent with examples
     def check_exit_intent(self) -> bool:
 
-        # Stop examples
-        stop_example_prompt = ""
-        if len(self.stop_examples) > 0:
-            stop_example_prompt = "Examples of User Message:"
-            stop_example_prompt += "".join(f"\n- {stop_example}" for stop_example in self.stop_examples)
+        # TODO: add exit examples
 
+        # Get user message
+        history = self.stringify_convo_history()
+
+        ###### by MAX ###### 
         # Get user message
         user_message = self.cat.working_memory["user_message_json"]["text"]
 
+        # Stop examples
+        stop_examples = """
+Examples where {"exit": true}:
+- exit form
+- stop it"""
+
+        for se in self.stop_examples:
+            stop_examples += f"\n- {se}"
+
+        ###### by MAX ###### 
         # Check exit prompt
         check_exit_prompt = \
 f"""Your task is to produce a JSON representing whether a user wants to exit or not.
@@ -55,30 +67,100 @@ JSON must be in this format:
 }}
 ```
 
-{stop_example_prompt}
+{stop_examples}
 
 ###User Message:
 {user_message}
 
-###AI Response:
 JSON:
 ```json
 {{
-    "exit":"""
-
-        # Print confirm prompt
-        print(check_exit_prompt)
+    "exit": """
 
         # Queries the LLM and check if user is agree or not
         response = self.cat.llm(check_exit_prompt, stream=True)
+
+        ###### by MAX ###### 
+        response = response[:response.find("```")] if "```" in response else response
+
+        return "true" in response.lower()
+
+
+    def extract(self):
+        
+        prompt = self.extraction_prompt()
+        log.debug(prompt)
+
+        # Invoke LLM chain
+        extraction_chain = LLMChain(
+            prompt     = PromptTemplate.from_template(prompt),
+            llm        = self._cat._llm,
+            verbose    = True,
+            output_key = "output"
+        )
+        json_str = extraction_chain.invoke({"stop": ["```"]})["output"]
+
+        ###### by MAX ###### 
+        json_str = json_str[:json_str.find("}") + 1] if "}" in json_str else json_str
+        
+        print(f"Form JSON after parser:\n{json_str}")
+
+        # json parser
+        try:
+            output_model = json.loads(json_str)
+        except Exception as e:
+            output_model = {} 
+            log.warning(e)
+
+        return output_model
+    
+
+    def confirm(self) -> bool:
+        
+        # Get user message
+        user_message = self.cat.working_memory["user_message_json"]["text"]
+        
+        # Confirm prompt
+        confirm_prompt = \
+f"""Your task is to produce a JSON representing whether a user is confirming or not.
+JSON must be in this format:
+```json
+{{
+    "confirm": // type boolean, must be `true` or `false` 
+}}
+```
+
+User said "{user_message}"
+
+JSON:
+```json
+{{
+    "confirm": """
+
+        # Queries the LLM and check if user is agree or not
+        response = self.cat.llm(confirm_prompt, stream=True)
+
+        ###### by MAX ###### 
+        response = response[:response.find("```")] if "```" in response else response
+
+        print(f"Confirm response:\n{response}")
+
         return "true" in response.lower()
 
 
     # Reprocessing of the response message to the user and save local chat history
     def message(self):
+        if self._state == CatFormState.CLOSED:
+            return {
+                "output": f"Form {type(self).__name__} closed"
+            }
+        
         response_message = super().message()
         print(f"message: {response_message}")
 
+        if self._state == CatFormState.WAIT_CONFIRM:
+            return response_message
+        
         # Add dialogue interaction to chat history
         user_message = self.cat.working_memory["user_message_json"]["text"]
         self.form_chat_history.append({"who": "Human", "message": user_message,     "why": {}})
@@ -98,9 +180,10 @@ For instance, if the missing details are address and phone, you should say:
 "I see that you have provided a name. However,
 I still need your surname and email. Could you start by giving me your name?" 
 """
-        
         response = self.cat.llm(prompt, stream=True)
-        return response
+        return {
+            "output": response
+        }
 
 
     # Local chat history
@@ -143,4 +226,6 @@ I still need your surname and email. Could you start by giving me your name?"
         result += "Thanks for your order.. your pizza is on its way!"
         result += "<br><br>"
         result += f"<img style='width:400px' src='https://maxdam.github.io/cat-pizza-challenge/img/order/pizza{random.randint(0, 6)}.jpg'>"
-        return result
+        return {
+            "output": result
+        }
